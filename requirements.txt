@@ -1,0 +1,5 @@
+numpy
+pandas
+matplotlib
+seaborn
+git+https://github.com/kernc/backtesting.py.git

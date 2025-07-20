@@ -1,0 +1,7 @@
+services:
+  trading:
+    image: trading
+    build:
+      context: .
+    ports:
+      - "8000:8000"
