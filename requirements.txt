@@ -2,4 +2,5 @@ numpy
 pandas
 matplotlib
 seaborn
+yfinance
 git+https://github.com/kernc/backtesting.py.git
