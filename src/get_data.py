@@ -28,4 +28,8 @@ if __name__=="__main__":
     if len(sys.argv)<2:
         print("usage: python get_data.py <ticker>")
         exit()
-    get_data(sys.argv[1])
+    df=get_data(sys.argv[1])
+    if df is None or len(df)==0:
+        print("get_data.py failed")
+    else:
+        print(f"get_data.py succeeded, obtained {len(df)} records")
