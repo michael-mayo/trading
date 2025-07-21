@@ -1,4 +1,3 @@
-from bokeh.io import export_png
 from backtesting import Backtest, Strategy
 from backtesting.lib import crossover
 from backtesting.test import SMA
