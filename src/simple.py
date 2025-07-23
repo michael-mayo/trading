@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from backtesting import Backtest, Strategy
 from backtesting.lib import crossover
@@ -32,20 +33,42 @@ class Simple(Strategy):
 def hatch_commission(order_size,_):
     return 3+max(0,order_size-300)*0.01
 
-# run strategy using yfinance data
-bt = Backtest(get_data("TQQQ",start_date="2020-01-01"),
-              Simple,
-              cash=1000,
-              commission=hatch_commission,
-              exclusive_orders=True,
-              trade_on_close=False)
-stats = bt.run()
+# optimise
+def optimise(data,n):
+    # define a set of param combinations
+    xx=[ (np.random.random(size=4)*2-1).tolist() for _ in range(n) ]
+    # run multiple simulations on the same data with different coefs
+    results = []
+    for x in xx:
+        Simple.coefs=x
+        bt=Backtest(data,Simple,cash=1000,
+                    commission=hatch_commission,
+                    exclusive_orders=True,
+                    trade_on_close=False)
+        stats=bt.run()
+        results.append([stats["CAGR [%]"],*x])
+    results=pd.DataFrame(results)
+    results.columns=["CAGR", *[f"c{i}" for i in range(len(results.columns)-1)]]
+    results=results.sort_values("CAGR",ascending=False).reset_index(drop=True)
+    # display results
+    print(results)
+    # validate the best set of coefs
+    best=results.iloc[0,1:].values
+    Simple.coefs=best
+    bt=Backtest(data,Simple,cash=1000,
+                commission=hatch_commission,
+                exclusive_orders=True,
+                trade_on_close=False)
+    stats=bt.run()
+    print(stats)
 
-# display results
-print(stats)
-bt.plot()
-trades=stats._trades[["EntryTime","EntryPrice","Size",
-                      "SL","TP",
-                      "ExitTime","ExitPrice"]]
-print(trades)
-trades.to_csv("trades.csv")
+
+
+
+
+optimise(get_data("TQQQ",start_date="2015-01-01",end_date="2020-01-01"),1000)
+#optimise(get_data("TQQQ",start_date="2017-01-01",end_date="2022-01-01"),1000)
+#optimise(get_data("TQQQ",start_date="2019-01-01",end_date="2024-01-01"),1000)
+#optimise(get_data("TQQQ",start_date="2021-01-01",end_date="2026-01-01"),1000)
+
+
