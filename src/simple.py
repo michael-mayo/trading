@@ -10,7 +10,8 @@ from get_data import get_data
 # define strategy
 class Simple(Strategy):
 
-    coefs=[-0.1,-0.1,-0.1,-0.1]
+    lookbacks=[1,3,8,21,55,144]
+    coefs=[0]*len(lookbacks)
 
     # constructor does nothing for now
     def init(self):
@@ -19,14 +20,15 @@ class Simple(Strategy):
     # strategy actions for next day
     def next(self):
         n=len(self.coefs)
-        if len(self.data.Close)<n:
+        if len(self.data.Close)<np.max(self.lookbacks):
             return
-        rtns=np.log(self.data.Close[-n:]/self.data.Open[-n:])
-        f=np.multiply(rtns,self.coefs).sum()
+        prices=list(map(lambda i: self.data.Close[-1*i],self.lookbacks))
+        f=np.multiply(prices,self.coefs).sum()
         if not self.position and f>=0:
-            self.buy()
+            self.buy(sl=self.data.Close[-1]*0.9)
         elif self.position and f<0:
             self.position.close()
+
 
 
 # define hatch commision
@@ -36,7 +38,7 @@ def hatch_commission(order_size,_):
 # optimise
 def optimise(data,n):
     # define a set of param combinations
-    xx=[ (np.random.random(size=4)*2-1).tolist() for _ in range(n) ]
+    xx=[ (np.random.random(size=len(Simple.coefs))*4-2).tolist() for _ in range(n) ]
     # run multiple simulations on the same data with different coefs
     results = []
     for x in xx:
@@ -55,20 +57,19 @@ def optimise(data,n):
     # validate the best set of coefs
     best=results.iloc[0,1:].values
     Simple.coefs=best
-    bt=Backtest(data,Simple,cash=1000,
+    print(best)
+    bt=Backtest(data,Simple,cash=10000,
                 commission=hatch_commission,
                 exclusive_orders=True,
                 trade_on_close=False)
     stats=bt.run()
     print(stats)
+    print(stats._trades)
 
 
 
 
 
-optimise(get_data("TQQQ",start_date="2015-01-01",end_date="2020-01-01"),1000)
-#optimise(get_data("TQQQ",start_date="2017-01-01",end_date="2022-01-01"),1000)
-#optimise(get_data("TQQQ",start_date="2019-01-01",end_date="2024-01-01"),1000)
-#optimise(get_data("TQQQ",start_date="2021-01-01",end_date="2026-01-01"),1000)
+optimise(get_data("TQQQ",start_date="2019-01-01"),100)
 
 
