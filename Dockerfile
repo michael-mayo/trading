@@ -1,4 +1,4 @@
-FROM python:latest
+FROM pytorch/pytorch:2.7.1-cuda11.8-cudnn9-runtime
 RUN apt update
 RUN apt install -y git
 ADD requirements.txt .
