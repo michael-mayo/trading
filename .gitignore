@@ -3,3 +3,4 @@ data/
 src/__pycache__/
 *.html
 trades.csv
+results.csv

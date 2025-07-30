@@ -1,3 +1,5 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 from backtesting import Backtest, Strategy
@@ -18,6 +20,7 @@ class MoneyManagement(Strategy):
         if not self.position and np.random.random()>=self.p:
             c=self.data.Close[-1]
             self.buy(sl=c-c*self.sl,tp=c+c*self.tp)
+
 
 
 
@@ -42,7 +45,27 @@ def run(ticker,sl,tp,verbose=False):
             bt.plot()
         return stats
 
-run("TQQQ",0.5,0.2,verbose=True)
+# do an experiment
+def exp(results_filename="results.csv"):
+    # build param sets
+    params=[]
+    for ticker in ["TQQQ"]:
+        for sl in [0.1,0.2,0.3,0.4]:
+            for tp in [0.1,0.2,0.3,0.4]:
+                for _ in range(1000):
+                    params.append([ticker,sl,tp])
+    # execute simulations in parallel
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        results=list(executor.map(lambda p: run(*p,verbose=False),params))
+    # assemble results
+    df=pd.DataFrame(params)
+    df.columns=["ticker","sl","tp"]
+    df["CAGR [%]"]=list(map(lambda r:r["CAGR [%]"],results))
+    # report results
+    df.to_csv(results_filename)
+    return df.groupby(["ticker","sl","tp"],as_index=False)["CAGR [%]"].agg("mean")
+
+print( exp() )
 
 
 
