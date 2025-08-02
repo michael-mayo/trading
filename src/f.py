@@ -137,7 +137,7 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
     run(tickers,data,global_best_params,verbose=True)
 
 
-exp(["TQQQ","LABU"], start_date="2019-01-01",pop_size=20,num_its_ga=5,num_its_ls=100)
+exp(["TQQQ","LABU"], start_date="2019-01-01",pop_size=500,num_its_ga=10,num_its_ls=100)
 
 
 
