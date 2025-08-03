@@ -36,7 +36,7 @@ class F(Strategy):
         # act
         if not self.position and f>0:
             self.buy()
-        elif self.position:
+        elif self.position and f<=0:
             self.position.close()
 
 
@@ -63,10 +63,11 @@ def run(tickers,data,X,verbose=False):
                 print(stats)
                 print(stats._trades)
                 bt.plot()
+            win_rate=stats["Win Rate [%]"]
             num_trades=stats["# Trades"]
-            calmar_ratio=stats["Calmar Ratio"]
-            values.append(0 if num_trades<30 else calmar_ratio)
-        return np.exp(values).sum()
+            alpha=min(1,num_trades/30)
+            values.append(alpha*win_rate if not np.isnan(win_rate) else 0)
+        return np.mean(values)
 
 
 # do an experiment
@@ -75,7 +76,7 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
     print("TICKERS =", tickers)
     print("START_DATE =", start_date)
     data=list(map(lambda ticker: get_data(ticker, start_date),tickers))
-    print("NUM_BARS =", len(data))
+    print("NUM_BARS =", list(map(len,data)))
     print("NUM_DIMS =", num_dims)
     print("POP_SIZE =", pop_size)
     print("NUM_ITS_GA =", num_its_ga)
@@ -136,8 +137,10 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
     print("GLOBAL_BEST_SCORE =", global_best_score)
     run(tickers,data,global_best_params,verbose=True)
 
+#tickers = ["TQQQ","LABU"]
+tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
 
-exp(["TQQQ","LABU"], start_date="2019-01-01",pop_size=500,num_its_ga=10,num_its_ls=100)
+exp(tickers,start_date="2019-01-01",pop_size=500,num_its_ga=500,num_its_ls=100)
 
 
 
