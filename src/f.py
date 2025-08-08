@@ -10,34 +10,40 @@ from get_data import get_data
 # define strategy
 class F(Strategy):
 
-    _lookback=20
+    _lookbacks={"long":200,"medium":20,"short":2}
     _coef=None
 
     # constructor does nothing for now
-    def init(self,lookback=20):
-        assert self._coef is not None, "coefs cannot be None"
-        assert len(self._coef)==7,"len of coefs must be 7"
-        assert self._lookback>=2,"lookback must be 2 or more"
+    def init(self):
+        pass
 
     # strategy actions for next day
     def next(self):
         # make sure we have enough data
-        if len(self.data.Close)<self._lookback:
+        if len(self.data.Close)<self._lookbacks["long"]:
             return
         # compute x values -- should be 1 less than number of coefficients
-        x1=(self.data.High[-1]/self.data.Close[-1])-1
-        x2=(self.data.Low[-1]/self.data.Close[-1])-1
-        x3=(self.data.Open[-1]/self.data.Close[-1])-1
-        x4=(self.data.High[-self._lookback:].max()/self.data.Close[-1])-1
-        x5=(self.data.Low[-self._lookback:].min()/self.data.Close[-1])-1
-        x6=(self.data.Open[-self._lookback]/self.data.Close[-1])-1
+        high_long,low_long=(self.data.High[-self._lookbacks["long"]:].max(),
+                            self.data.Low[-self._lookbacks["long"]:].min())
+        high_medium,low_medium=(self.data.High[-self._lookbacks["medium"]:].max(),
+                                self.data.Low[-self._lookbacks["medium"]:].min())
+        high_short,low_short=(self.data.High[-self._lookbacks["short"]:].max(),
+                              self.data.Low[-self._lookbacks["short"]:].min())
+        close=self.data.Close[-1]
+        x1=(close/high_long)-1
+        x2=(close/low_long)-1
+        x3=(close/high_medium)-1
+        x4=(close/low_medium)-1
+        x5=(close/high_short)-1
+        x6=(close/low_short)-1
         # compute f
         f=np.multiply([1,x1,x2,x3,x4,x5,x6],self._coef).sum()
         # act
         if not self.position and f>0:
             self.buy()
-        elif self.position and f<=0:
+        elif self.position and f<0:
             self.position.close()
+
 
 
 # define hatch commision
@@ -63,11 +69,16 @@ def run(tickers,data,X,verbose=False):
                 print(stats)
                 print(stats._trades)
                 bt.plot()
-            win_rate=stats["Win Rate [%]"]
             num_trades=stats["# Trades"]
-            alpha=min(1,num_trades/30)
-            values.append(alpha*win_rate if not np.isnan(win_rate) else 0)
-        return np.mean(values)
+            if num_trades>0:
+                return_percent=stats["Return [%]"]
+                buy_and_hold_percent=stats["Buy & Hold Return [%]"]
+                diff=return_percent-buy_and_hold_percent
+                value=1.0/(1.0+np.exp(-diff))
+            else:
+                value=0
+            values.append(value)
+        return np.sum(values)
 
 
 # do an experiment
@@ -108,11 +119,12 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
                        ])
         # report pop best
         print("ga iteration",it,"best score",pop_scores[pop_sorted[-1]])
+        print("gen best params:",pop[pop_sorted[-1]].tolist())
         # create the next population
         if it<num_its_ga-1:
             next_pop=np.empty(pop.shape)
-            #next_pop[0,:]=pop[pop_sorted[-1],:] # copy one elite
-            for i in range(0,len(pop)):
+            next_pop[0,:]=pop[pop_sorted[-1],:] # copy one elite
+            for i in range(1,len(pop)):
                 a,b,c,d=np.random.randint(len(pop),size=4)
                 w0=a if pop_scores[a]>pop_scores[b] else b
                 w1=c if pop_scores[c]>pop_scores[d] else d
@@ -140,7 +152,7 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
 #tickers = ["TQQQ","LABU"]
 tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
 
-exp(tickers,start_date="2019-01-01",pop_size=500,num_its_ga=500,num_its_ls=100)
+exp(tickers,start_date="2019-01-01",pop_size=500,num_its_ga=10,num_its_ls=100)
 
 
 
