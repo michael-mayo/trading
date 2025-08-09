@@ -10,8 +10,10 @@ from get_data import get_data
 # define strategy
 class F(Strategy):
 
-    _lookbacks={"long":200,"medium":20,"short":2}
-    _coef=None
+    # define size of feature vector
+    _X=[0,0,0,       # three lookback periods
+        0,0,0,0,0,0, # six coefficients for buy signal
+        0,0,0,0,0,0] # six coefficients for sell signal
 
     # constructor does nothing for now
     def init(self):
@@ -19,29 +21,32 @@ class F(Strategy):
 
     # strategy actions for next day
     def next(self):
-        # make sure we have enough data
-        if len(self.data.Close)<self._lookbacks["long"]:
+        # decode three integer periods from the feature vector
+        lb_func=lambda x: int(1+100*abs(x))
+        lb0=lb_func(self._X[0])
+        lb1=lb_func(self._X[1])
+        lb2=lb_func(self._X[2])
+        # if not enough data, give up
+        if max(lb0,lb1,lb2)>len(self.data.Close):
             return
-        # compute x values -- should be 1 less than number of coefficients
-        high_long,low_long=(self.data.High[-self._lookbacks["long"]:].max(),
-                            self.data.Low[-self._lookbacks["long"]:].min())
-        high_medium,low_medium=(self.data.High[-self._lookbacks["medium"]:].max(),
-                                self.data.Low[-self._lookbacks["medium"]:].min())
-        high_short,low_short=(self.data.High[-self._lookbacks["short"]:].max(),
-                              self.data.Low[-self._lookbacks["short"]:].min())
-        close=self.data.Close[-1]
-        x1=(close/high_long)-1
-        x2=(close/low_long)-1
-        x3=(close/high_medium)-1
-        x4=(close/low_medium)-1
-        x5=(close/high_short)-1
-        x6=(close/low_short)-1
-        # compute f
-        f=np.multiply([1,x1,x2,x3,x4,x5,x6],self._coef).sum()
-        # act
+        # get most recent price
+        close = self.data.Close[-1]
+        # calculate the three means
+        mean0=self.data.Close[-lb0:].mean()
+        mean1=self.data.Close[-lb1:].mean()
+        mean2=self.data.Close[-lb2:].mean()
+        # calculate f
+        x0=1 if close>=mean0 else -1
+        x1=1 if close>=mean1 else -1
+        x2=1 if close>=mean2 else -1
+        x3=1 if mean1>=mean0 else -1
+        x4=1 if mean2>=mean0 else -1
+        x5=1 if mean2>=mean1 else -1
+        f=np.multiply([x0,x1,x2,x3,x4,x5],self._X[3:9]).sum()
+        g=np.multiply([x0,x1,x2,x3,x4,x5],self._X[9:]).sum()
         if not self.position and f>0:
             self.buy()
-        elif self.position and f<0:
+        elif self.position and g>0:
             self.position.close()
 
 
@@ -54,7 +59,7 @@ def hatch_commission(order_size,_):
 def run(tickers,data,X,verbose=False):
         class LocalF(F):
             pass
-        LocalF._coef=X
+        LocalF._X=X
         values=[]
         for t,dt in zip(tickers,data):
             LocalF.__name__=f"LocalF_{t}"
@@ -78,12 +83,14 @@ def run(tickers,data,X,verbose=False):
             else:
                 value=0
             values.append(value)
-        return np.sum(values)
+        return np.mean(values)
 
 
 # do an experiment
-def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,results_filename="results.csv"):
-    # load cache
+def exp(tickers, start_date,
+        pop_size=10,num_its_ga=10,num_its_ls=10,
+        results_filename="results.csv"):
+    num_dims = len(F._X)
     print("TICKERS =", tickers)
     print("START_DATE =", start_date)
     data=list(map(lambda ticker: get_data(ticker, start_date),tickers))
@@ -103,7 +110,11 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
                 X[i]=X[i]*np.random.choice([0.99,1.01])
         return X
     # initialise random population
-    pop=np.random.random((pop_size,num_dims))*2.0-1
+    #pop=np.zeros((pop_size,num_dims))
+    #for i in range(len(pop)):
+    #    pop[i,np.random.randint(num_dims)]=np.random.random()*0.1-0.05
+    pop=np.random.random((pop_size,num_dims))*2-1
+
     # iterate for genetic algorithm
     result=[]
     for it in range(num_its_ga):
@@ -152,7 +163,9 @@ def exp(tickers, start_date,num_dims=7,pop_size=20,num_its_ga=5,num_its_ls=10,re
 #tickers = ["TQQQ","LABU"]
 tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
 
+#exp(tickers,start_date="2019-01-01")
 exp(tickers,start_date="2019-01-01",pop_size=500,num_its_ga=10,num_its_ls=100)
+
 
 
 
