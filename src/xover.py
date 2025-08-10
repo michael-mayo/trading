@@ -4,6 +4,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
+from scipy.stats import qmc
 from backtesting import Backtest,Strategy
 from get_data import get_data
 
@@ -11,24 +12,30 @@ from get_data import get_data
 class F(Strategy):
 
     # define size of feature vector
-    _X=[0]*20
+    _X=[0]*2
 
-    # constructor does nothing for now
+    # constructor
     def init(self):
         pass
+
     # strategy actions for next day
     def next(self):
-        n=len(self._X)
-        if len(self.data.Close)<n+1:
+        if len(self.data.Close)<200:
             return
-        rtns=[np.log(self.data.Close[i+1]/self.data.Close[i])
-            for i in range( len(self.data.Close)-n-1, len(self.data.Close)-1 )]
-        f=np.multiply(self._X,rtns).sum()
-        if not self.position and f>0:
-            sl,tp=self.data.Close[-1]*0.98,self.data.Close[-1]*1.02
-            if sl<=0:
-                sl=None
-            self.buy(sl=sl,tp=tp)
+        n=len(self._X)
+        p,m=np.zeros(n),np.zeros(n)
+        for i in range(n):
+            p[i]=round(1+199*self._X[i])
+            m[i]=self.data.Close[-int(p[i]):].mean()
+        c=self.data.Close[-1]
+        if not self.position and c>m[0]:
+            #sl,tp=self.data.Close[-1]*0.98,self.data.Close[-1]*1.02
+            #if sl<=0:
+            #    sl=None
+            #self.buy(sl=sl,tp=tp)
+            self.buy()
+        elif self.position and c<m[1]:
+            self.position.close()
 
 
 
@@ -55,14 +62,12 @@ def run(tickers,data,X,verbose=False):
                 print(stats)
                 print(stats._trades)
                 bt.plot()
-            num_trades=stats["# Trades"]
-            win_rate=stats["Win Rate [%]"]
-            if np.isnan(win_rate) or win_rate<=50 or num_trades<=0:
+            calmar=stats["Calmar Ratio"]
+            sortino=stats["Sortino Ratio"]
+            if np.isnan(calmar):
                 values.append(-100)
             else:
-                num_wins=(win_rate/100)*num_trades
-                num_losses=(1-win_rate/100)*num_trades
-                values.append(num_wins-num_losses)
+                values.append(0.5*(calmar+sortino))
         return np.mean(values)
 
 
@@ -82,19 +87,16 @@ def exp(tickers, start_date,
     # define search ops
     def crossover(X0, X1):
         t = np.random.random() * 1.2 - 0.1
-        return X0 + t * (X1 - X0)
+        return np.clip(X0 + t * (X1 - X0),a_min=0,a_max=1)
     def mutate(X):
         j=np.random.randint(len(X))
         for i in range(len(X)):
             if i==j or np.random.random()<0.05:
                 X[i]=X[i]*np.random.choice([0.99,1.01])
-        return X
-    # initialise random population
-    pop=np.zeros((pop_size,num_dims))
-    for i in range(len(pop)):
-        pop[i,np.random.randint(num_dims)]=np.random.random()-0.5
-    #pop=np.random.random((pop_size,num_dims))-0.5
-
+        return np.clip(X,a_min=0,a_max=1)
+    # initialise random population using sobol sequences
+    sampler = qmc.Sobol(num_dims)
+    pop = sampler.random(pop_size)
     # iterate for genetic algorithm
     result=[]
     for it in range(num_its_ga):
