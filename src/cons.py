@@ -2,6 +2,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 import warnings
 warnings.filterwarnings("ignore")
+import functools
 import numpy as np
 import pandas as pd
 from scipy.stats import qmc
@@ -12,7 +13,7 @@ from get_data import get_data
 class F(Strategy):
 
     # define size of feature vector
-    _X=[0]*5
+    _X=[0]*3
 
     # constructor
     def init(self):
@@ -23,25 +24,18 @@ class F(Strategy):
         # need minimum of 200 bars
         if len(self.data.Close) < 200:
             return
-        # decode std period and window size
-        std_period=round(1 + 99 * self._X[0])
-        window_size=round(1 + 99 * self._X[1])
-        # decode stops
-        sl_factor=10 * self._X[2]
-        tp_factor=10 * self._X[3]
-        # compute std devs
-        std_long=self.data.Close[-100:].std()
-        std_short=self.data.Close[-std_period:].std()
-        # compute window high
-        window_high=self.data.High[-window_size:].max()
+        # decode params
+        period=round(1 + 200 * self._X[0])
+        t0=0.49*self._X[1]
+        t1=0.49*self._X[2]+0.51
+        # get all prices visited in the period
+        p0,p1=np.quantile(self.data.Close[-period:],[t0,t1])
         # act
-        close=self.data.Close[-1]
-        if not self.position and (std_short/std_long)<self._X[4] and close>=window_high:
-            sl_price=close-max(close*0.01,sl_factor*std_short)
-            if sl_price<=0:
-                sl_price=None
-            tp_price=close+max(close*0.01,tp_factor*std_short)
-            self.buy(sl=sl_price,tp=tp_price)
+        c=self.data.Close[-1]
+        if not self.position and c<p0:
+            self.buy()
+        elif self.position and c>p1:
+            self.position.close()
 
 
 
@@ -152,7 +146,7 @@ def exp(tickers, start_date,
 tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
 
 #exp(tickers,start_date="2019-01-01")
-exp(tickers,start_date="2019-01-01",pop_size=500,num_its_ga=10,num_its_ls=100)
+exp(tickers,start_date="2019-01-01",pop_size=100,num_its_ga=10,num_its_ls=100)
 
 
 
