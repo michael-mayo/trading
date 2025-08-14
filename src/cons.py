@@ -12,7 +12,6 @@ from get_data import get_data
 # define strategy
 class F(Strategy):
 
-    # define size of feature vector
     _X=[0]*3
 
     # constructor
@@ -21,20 +20,30 @@ class F(Strategy):
 
     # strategy actions for next day
     def next(self):
-        # need minimum of 200 bars
-        if len(self.data.Close) < 200:
+        # decode period and threshold
+        period=int(round(self._X[0]*99))+1
+        threshold0,threshold1=self._X[1]*100,self._X[2]*100
+        # need minimum of one diff for each day
+        if len(self.data.Close) < period+1:
             return
-        # decode params
-        period=round(1 + 200 * self._X[0])
-        t0=0.49*self._X[1]
-        t1=0.49*self._X[2]+0.51
-        # get all prices visited in the period
-        p0,p1=np.quantile(self.data.Close[-period:],[t0,t1])
-        # act
-        c=self.data.Close[-1]
-        if not self.position and c<p0:
+        # get last n diffs
+        diffs=[np.log(self.data.Close[i]-self.data.Close[i-1])
+               for i in range(-period,0)]
+        # split into positive and negative
+        pos=list(filter(lambda d: d>0,diffs))
+        neg=list(filter(lambda d: d<0,diffs))
+        if len(pos)==0:
+            rsi=0
+        elif len(neg)==0:
+            rsi=100
+        else:
+            pos=sum(pos)/len(pos)
+            neg=-1*sum(neg)/len(neg)
+            rsi=100-100/(1+pos/neg)
+        #print(rsi,period,threshold0,threshold1)
+        if not self.position and rsi<threshold0:
             self.buy()
-        elif self.position and c>p1:
+        elif self.position:# and rsi>threshold1:
             self.position.close()
 
 
@@ -62,12 +71,11 @@ def run(tickers,data,X,verbose=False):
                 print(stats)
                 print(stats._trades)
                 bt.plot()
-            calmar=stats["Calmar Ratio"]
-            sortino=stats["Sortino Ratio"]
-            if np.isnan(calmar):
-                values.append(-100)
+            win_rate=stats["Win Rate [%]"]
+            if np.isnan(win_rate):
+                values.append(0)
             else:
-                values.append(0.5*(calmar+sortino))
+                values.append(win_rate)
         return np.mean(values)
 
 
@@ -96,7 +104,7 @@ def exp(tickers, start_date,
         return np.clip(X,a_min=0,a_max=1)
     # initialise random population using sobol sequences
     sampler = qmc.Sobol(num_dims)
-    pop = sampler.random(pop_size)
+    pop = sampler.random(pop_size)# -0..    1
     # iterate for genetic algorithm
     result=[]
     for it in range(num_its_ga):
@@ -142,11 +150,12 @@ def exp(tickers, start_date,
     print("GLOBAL_BEST_SCORE =", global_best_score)
     run(tickers,data,global_best_params,verbose=True)
 
-#tickers = ["TQQQ","LABU"]
-tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
+tickers = ["TQQQ"]
+#tickers = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLB", "XLRE", "XLK", "XLU"]
 
-#exp(tickers,start_date="2019-01-01")
-exp(tickers,start_date="2019-01-01",pop_size=100,num_its_ga=10,num_its_ls=100)
+
+exp(tickers,start_date="2019-01-01")
+#exp(tickers,start_date="2019-01-01",pop_size=100,num_its_ga=10,num_its_ls=100)
 
 
 
